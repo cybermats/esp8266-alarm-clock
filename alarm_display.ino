@@ -19,47 +19,9 @@ void setup() {
   }
 }
 
-uint8_t days = 0;
-uint8_t hour = 0;
-uint8_t minute = 0;
-bool colon = false;
-
 void loop() {
-  // put your main code here, to run repeatedly:
-  timeNow = millis();
-  auto diff = timeNow - timeLast;
-
-  if (diff > 1000) {
-    ++minute;
-    timeLast = timeNow;
-    colon = true;
-  }
-
-  if (minute >= 60) {
-    ++hour;
-    minute %= 60;
-  }
-
-  if (hour >= 24) {
-    ++days;
-  }
-
-  if (timeNow == timeLast) {
-    Serial.print("Time is: ");
-    Serial.print(hour, 10);
-    Serial.print(":");
-    Serial.print(minute, 10);
-    Serial.print(":");
-    Serial.print(colon, 10);
-    Serial.print(" ");
-    Serial.print(diff, 10);
-    Serial.println();
-    display.setTime(hour, minute, colon);
-    display.writeDisplay();
-  }
-  else if (diff > 500 && colon) {
-    colon = false;
-    display.setColon(colon);
+  if (clock.tick()) {
+    display.setTime(clock.getMinutes(), clock.getSeconds(), clock.getColon());
     display.writeDisplay();
   }
   

@@ -1,6 +1,5 @@
 
 
-
 class WifiClock
 {
 public:
@@ -38,8 +37,8 @@ public:
     if (now == _last) {
       return true;
     }
-    else if (diff > 500 && colon) {
-      colon = false;
+    else if (diff > 500 && _colon) {
+      _colon = false;
       return true;
     }
     return false;
@@ -66,10 +65,10 @@ public:
   }
 
 private:
-  unsigned byte _days;
-  unsigned byte _hours;
-  unsigned byte _minutes;
-  unsigned byte _seconds;
+  byte _days;
+  byte _hours;
+  byte _minutes;
+  byte _seconds;
   bool _colon;
   unsigned long _last;
 };
