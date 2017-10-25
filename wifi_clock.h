@@ -7,7 +7,7 @@ public:
 
   WifiClock()
   : _ntpUDP()
-  , _timeClient(_ntpUDP)
+  , _timeClient(_ntpUDP, 2 * 60 * 60)
   {
     _timeClient.begin();
     _timeClient.update();
