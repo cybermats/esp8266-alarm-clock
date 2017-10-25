@@ -44,6 +44,7 @@ public:
 
     writeCommand(KT16K33_CMD_OSCILLATOR | KT16K33_CMD_ON); // Turn on oscillator
     writeCommand(KT16K33_CMD_DISPLAY | KT16K33_CMD_ON); // Turn on display
+    setBrightness(1);
   }
 
   byte setBrightness(uint8_t b)
