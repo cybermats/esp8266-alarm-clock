@@ -36,7 +36,7 @@ public:
   : _displaybuffer({0, 0, 0, 0, 0, 0, 0, 0})
   , _colon(false)
   {}
-  byte init(uint8_t sda, uint8_t scl, uint8_t addr)
+  byte begin(uint8_t sda, uint8_t scl, uint8_t addr)
   {
     _i2c_addr = addr;
     Wire.begin(sda, scl);
@@ -50,6 +50,10 @@ public:
   {
     if (b > 15) b = 15;
     return writeCommand(KT16K33_CMD_BRIGHTNESS | b);
+  }
+
+  void setBlink(bool state) {
+    writeCommand(KT16K33_CMD_DISPLAY | (state ? KT16K33_CMD_DISPLAY_BLINK_1HZ : KT16K33_CMD_DISPLAY_BLINK_OFF));
   }
 
   void setHour(uint8_t hour) 

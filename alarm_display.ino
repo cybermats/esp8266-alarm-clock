@@ -4,6 +4,7 @@
 
 #include "clock_display.h"
 #include "wifi_clock.h"
+#include "alarm_clock.h"
 
 
 /* 
@@ -20,6 +21,7 @@
 
 ClockDisplay display;
 WifiClock clock;
+AlarmClock alarm;
 Encoder knob(ROTARY_A, ROTARY_B);
 Bounce button;
 
@@ -27,9 +29,10 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Clock starting up...");
   // put your setup code here, to run once:
-  if(display.init(4, 5, 0x70)) {
+  if(display.begin(4, 5, 0x70)) {
     Serial.println("Error starting display.");
   } 
+  display.setBlink(false);
   Serial.print("Wifi connecting... ");
   WiFi.begin(SSID_NAME, SSID_PASS);
 
@@ -50,27 +53,55 @@ void setup() {
 
 }
 
-int ledState = 0;
+int clockState = 1;
 uint32_t oldPosition;
+uint32_t alarmUpdateTime;
 
 void loop() {
-  if (clock.tick()) {
-    display.setTime(clock.getHours(), clock.getMinutes(), clock.getColon());
-    display.writeDisplay();
-  }
-
   auto newRawPosition = knob.read();
   auto newPosition = newRawPosition >> 2;
-  if (newPosition != oldPosition) {
+  int8_t knobDiff = newPosition - oldPosition;
+  if (knobDiff) {
     oldPosition = newPosition;
-    Serial.print("Rotary: ");
-    Serial.println(newPosition);  
+  }
+  
+  if (clockState) {
+    if (clock.tick()) {
+      display.setTime(clock.getHours(), clock.getMinutes(), clock.getColon());
+      display.writeDisplay();
+    }
+  }
+  else {
+    if (knobDiff) {
+      alarmUpdateTime = millis();
+      alarm.update(knobDiff);
+      display.setTime(alarm.getHours(), alarm.getMinutes(), true);
+      display.writeDisplay();
+    }
+    auto sinceChange = millis() - alarmUpdateTime;
+    if (sinceChange > 5000) {
+      Serial.println("Switching back.");
+      clockState = true;
+      display.setBlink(false);
+    }
   }
 
   button.update();
 
   if (button.fell()) {
-    ledState = !ledState;
-    digitalWrite(LED_PORT, ledState);
+    clockState = !clockState;
+    digitalWrite(LED_PORT, clockState);
+    display.setBlink(clockState);
+    if (clockState) {
+      display.setBlink(false);
+      display.setTime(clock.getHours(), clock.getMinutes(), clock.getColon());
+      display.writeDisplay();
+    }
+    else {
+      alarmUpdateTime = millis();
+      display.setBlink(true);
+      display.setTime(alarm.getHours(), alarm.getMinutes(), true);
+      display.writeDisplay();
+    }
   }
 }

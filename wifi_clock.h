@@ -25,15 +25,15 @@ public:
     return false;
   }
 
-  byte getHours() {
+  uint8_t getHours() {
     return _timeClient.getHours();
   }
 
-  byte getMinutes() {
+  uint8_t getMinutes() {
     return _timeClient.getMinutes();
   }
 
-  byte getSeconds() {
+  uint8_t getSeconds() {
     return _timeClient.getSeconds();
   }
 
