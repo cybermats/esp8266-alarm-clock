@@ -1,8 +1,10 @@
 #include <ESP8266WiFi.h>
 #include <Encoder.h>
+#include <Bounce2.h>
 
 #include "clock_display.h"
 #include "wifi_clock.h"
+
 
 /* 
  *  secret.h contains defines for ssid and password
@@ -18,9 +20,8 @@
 
 ClockDisplay display;
 WifiClock clock;
-//ClickEncoder knob(0, 2, 14, 4);
 Encoder knob(ROTARY_A, ROTARY_B);
-
+Bounce button;
 
 void setup() {
   Serial.begin(115200);
@@ -29,23 +30,28 @@ void setup() {
   if(display.init(4, 5, 0x70)) {
     Serial.println("Error starting display.");
   } 
-  else {
-    Serial.println("Display started.");
-  }
-  Serial.println("Wifi connecting...");
+  Serial.print("Wifi connecting... ");
   WiFi.begin(SSID_NAME, SSID_PASS);
 
   while ( WiFi.status() != WL_CONNECTED) {
     delay( 500 );
     Serial.print(".");
   }
+  Serial.println();
+  
   Serial.println("Wifi connected.");
-  pinMode(ROTARY_BUTT, INPUT);
+  Serial.println("Initializing LEDs and Buttons");
   pinMode(LED_PORT, OUTPUT);
+  pinMode(ROTARY_BUTT, INPUT_PULLUP);
+  button.attach(ROTARY_BUTT);
+  button.interval(5);
+  
+  Serial.println("Clock started.");
 
 }
-long oldPosition = -999;
-int oldButtonState = false;
+
+int ledState = 0;
+uint32_t oldPosition;
 
 void loop() {
   if (clock.tick()) {
@@ -53,21 +59,18 @@ void loop() {
     display.writeDisplay();
   }
 
-  long newPosition = knob.read();
+  auto newRawPosition = knob.read();
+  auto newPosition = newRawPosition >> 2;
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
     Serial.print("Rotary: ");
     Serial.println(newPosition);  
   }
 
-  int newButtonState = digitalRead(ROTARY_BUTT);
-  if (newButtonState != oldButtonState) {
-    oldButtonState = newButtonState;
-    Serial.print("Button: ");
-    Serial.println(oldButtonState);
-    digitalWrite(LED_PORT, oldButtonState ? HIGH : LOW);
+  button.update();
+
+  if (button.fell()) {
+    ledState = !ledState;
+    digitalWrite(LED_PORT, ledState);
   }
-
-  
-
 }
