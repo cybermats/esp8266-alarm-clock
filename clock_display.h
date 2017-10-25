@@ -82,7 +82,7 @@ public:
   {
     auto hour = _hour;
 
-    _displaybuffer[4] = 0;
+    _displaybuffer[0] = 0;
     if (hour >= 10) {
       _displaybuffer[0] = numbertable[hour/10];
     }
