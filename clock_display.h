@@ -32,9 +32,8 @@ constexpr uint8_t numbertable[] = {
 class ClockDisplay
 {
 public:
-  ClockDisplay(bool show24h = true)
-  : _show24h(show24h)
-  , _displaybuffer({0, 0, 0, 0, 0, 0, 0, 0})
+  ClockDisplay()
+  : _displaybuffer({0, 0, 0, 0, 0, 0, 0, 0})
   , _colon(false)
   {}
   byte init(uint8_t sda, uint8_t scl, uint8_t addr)
@@ -82,7 +81,6 @@ public:
   void render()
   {
     auto hour = _hour;
-    if (!_show24h) hour %= 12;
 
     _displaybuffer[4] = 0;
     if (hour >= 10) {
@@ -116,7 +114,6 @@ private:
     return Wire.endTransmission();
   }
 
-  bool _show24h;
   uint8_t _i2c_addr;
   uint16_t _displaybuffer[8];
   uint8_t _hour;
