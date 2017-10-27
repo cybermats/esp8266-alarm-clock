@@ -1,3 +1,5 @@
+#pragma once
+
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
@@ -35,6 +37,10 @@ public:
 
   uint8_t getSeconds() {
     return _timeClient.getSeconds();
+  }
+
+  uint32_t getEpochTime() {
+    return _timeClient.getEpochTime();
   }
 
   bool getColon() {

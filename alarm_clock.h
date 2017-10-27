@@ -2,11 +2,19 @@
 class AlarmClock
 {
 public:
-  AlarmClock(int hours = 0, int minutes = 0, int interval = 5)
-  : _hours(hours)
-  , _minutes(minutes)
+  AlarmClock(int interval = 5)
+  : _hours(0)
+  , _minutes(0)
   , _interval(interval)
   {}
+
+  void setHours(byte hours) {
+    _hours = hours;
+  }
+
+  void setMinutes(byte minutes) {
+    _minutes = minutes;
+  }
 
   int getHours() const {
     return _hours;
@@ -14,6 +22,15 @@ public:
 
   int getMinutes() const {
     return _minutes;
+  }
+
+  String toString() const {
+    String output = "";
+    output += _hours;
+    output += ":";
+    if (_minutes < 10) output += "0";
+    output += _minutes;
+    return output;
   }
 
   void update(int8_t delta) {
