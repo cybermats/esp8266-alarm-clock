@@ -18,7 +18,7 @@ public:
   , _initialTriggerTime()
   {}
 
-  void begin(const char* mqtt_server, uint16_t mqtt_port = 1883) 
+  void begin(uint32_t now, const char* mqtt_server, uint16_t mqtt_port = 1883) 
   {
     EEPROM.begin(5);
     _hours = EEPROM.read(0);
@@ -33,6 +33,12 @@ public:
     Serial.println(mqtt_port);
     _ps_client.setServer(mqtt_server, mqtt_port);
     connectMQTT();
+    _initialTriggerTime = recalculateTrigger(now, _hours, _minutes - (int8_t)_initial, false);
+    _alarmTriggerTime = recalculateTrigger(now, _hours, _minutes, false);
+    Serial.print("Initial initialized. Next alarm at: ");
+    Serial.println(formatTime(_initialTriggerTime));
+    Serial.print("Alarm initialized. Next alarm at: ");
+    Serial.println(formatTime(_alarmTriggerTime));
   }
 
   void setAlarm(uint8_t hours, uint8_t minutes, uint8_t initial, AlarmType active, uint32_t now)
@@ -41,17 +47,12 @@ public:
     _minutes = minutes;
     _initial = initial;
     _active = active;
+    _triggered = false;
 
-    EEPROM.begin(5);
-    EEPROM.write(0, _hours);
-    EEPROM.write(1, _minutes);
-    EEPROM.write(2, _initial);
-    EEPROM.write(3, _active);
-    EEPROM.write(4, false);
-    EEPROM.end();
-    
-    _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
-    _alarmTriggerTime = getNextAlarmTime(now, _hours, _minutes);
+    saveState();
+
+    _initialTriggerTime = recalculateTrigger(now, _hours, _minutes - (int8_t)_initial, false);
+    _alarmTriggerTime = recalculateTrigger(now, _hours, _minutes, false);
     Serial.print("Initial initialized. Next alarm at: ");
     Serial.println(formatTime(_initialTriggerTime));
     Serial.print("Alarm initialized. Next alarm at: ");
@@ -60,7 +61,7 @@ public:
 
   bool update(uint32_t now) const
   {
-    if (_active) {
+    if (_active == WEEKDAY || _active == ON || (_active == ONCE && !_triggered)) {
       if (_alarmTriggerTime < now || _initialTriggerTime < now) {
         return true;
       }
@@ -69,34 +70,35 @@ public:
   }
 
   void process(uint32_t now) {
-    // Test if this is the first run, which means we haven't calculated
-    // the trigger times. Let's do that.
-    if (_alarmTriggerTime == 0 || _initialTriggerTime == 0) {
-      
-      _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
-      _alarmTriggerTime = getNextAlarmTime(now, _hours, _minutes);
-      
-      Serial.print("Initial initialized. Next alarm at: ");
-      Serial.println(formatTime(_initialTriggerTime));
-      Serial.print("Alarm initialized. Next alarm at: ");
-      Serial.println(formatTime(_alarmTriggerTime));
-    }
-
-    
-    if (_initialTriggerTime < now && _initialTriggerTime != _alarmTriggerTime) {
-      _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
-      Serial.print("Initial triggered. Next alarm at: ");
-      Serial.println(formatTime(_initialTriggerTime));
+    if ((_initialTriggerTime < now) && (_initialTriggerTime != _alarmTriggerTime)) {
+      _initialTriggerTime = recalculateTrigger(now, _hours, _minutes - (int8_t)_initial, false);
       sendMQTTMessage(_initial_topic, String(_initial));
+      Serial.print("Initial triggered. ");
+      if ((_active == ONCE && !_triggered) || _active != ONCE) {
+        Serial.print("Next alarm at: ");
+        Serial.println(formatTime(_initialTriggerTime));
+      } else {
+        Serial.println("No new alarm setup"); 
+      }
     }
     
     if (_alarmTriggerTime < now) {
-      _alarmTriggerTime = getNextAlarmTime(now, _hours, _minutes);
+      _alarmTriggerTime = recalculateTrigger(now, _hours, _minutes, true);
+      sendMQTTMessage(_actual_topic, "0");
       Serial.print("Alarm triggered. Next alarm at: ");
       Serial.println(formatTime(_alarmTriggerTime));
-      sendMQTTMessage(_actual_topic, "alarm");
+      
+      Serial.print("Alarm triggered. ");
+      
+      if ((_active == ONCE && !_triggered) || _active != ONCE) {
+        Serial.print("Next alarm at: ");
+        Serial.println(formatTime(_initialTriggerTime));
+      } else {
+        Serial.println("No new alarm setup"); 
+      }
     }
   }
+
   uint8_t getHours() const {
     return _hours;
   }
@@ -114,6 +116,32 @@ public:
   }
   
 private:
+
+  uint32_t recalculateTrigger(uint32_t now, uint8_t hours, uint8_t minutes, bool mainAlarm) {
+    switch(_active) {
+      case OFF:
+        return 0;
+      case ONCE:
+        if (mainAlarm) {
+          _triggered = true;
+          saveState();
+        }
+        return getNextAlarmTime(now, hours, minutes);
+      case WEEKDAY:
+        {
+          auto trigger = getNextAlarmTime(now, hours, minutes);
+          if (getDay(trigger) == 0) // compensate for sunday
+            trigger = addDays(trigger, 1); 
+          if (getDay(trigger) == 6) // compensate for saturday
+            trigger = addDays(trigger, 2);
+          return trigger;
+        }
+      case ON:
+      default:
+        return getNextAlarmTime(now, hours, minutes);
+    }
+  }
+
   void connectMQTT() {
     while (!_ps_client.connected()) {
       Serial.print("Attempting MQTT connection...");
@@ -134,8 +162,15 @@ private:
     _ps_client.publish(topic, message.c_str());
   }
 
-
-
+  void saveState() {
+    EEPROM.begin(5);
+    EEPROM.write(0, _hours);
+    EEPROM.write(1, _minutes);
+    EEPROM.write(2, _initial);
+    EEPROM.write(3, _active);
+    EEPROM.write(4, _triggered);
+    EEPROM.end();
+  }
 
   WiFiClient _wifiClient;
   PubSubClient _ps_client;

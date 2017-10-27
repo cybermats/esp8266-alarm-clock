@@ -25,6 +25,7 @@ public:
       case OFF: return "off";
       case ONCE: return "once";
       case WEEKDAY: return "wday";
+      default:
       case ON: return "on";
     }
   }

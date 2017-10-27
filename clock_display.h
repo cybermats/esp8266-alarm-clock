@@ -102,16 +102,16 @@ class ClockDisplay
 {
 public:
   ClockDisplay(uint8_t addr)
-  : _displaybuffer({0, 0, 0, 0, 0, 0, 0, 0})
+  : _displaybuffer{0, 0, 0, 0, 0, 0, 0, 0}
   , _i2c_addr(addr)
   {}
-  byte begin(uint8_t sda, uint8_t scl)
+  
+  void begin(uint8_t sda, uint8_t scl)
   {
     Wire.begin(sda, scl);
 
     writeCommand(KT16K33_CMD_OSCILLATOR | KT16K33_CMD_ON); // Turn on oscillator
     writeCommand(KT16K33_CMD_DISPLAY | KT16K33_CMD_OFF); // Turn on display
-//    setBrightness(1);
   }
 
   byte setBrightness(uint8_t b)
@@ -177,7 +177,7 @@ public:
     auto len = msg.length();
     if (len > 4) len = 4;
     uint8_t buffer[] = {0, 0, 0, 0};
-    for(int i = 0; i < len; ++i) {
+    for(uint8_t i = 0; i < len; ++i) {
       char c = msg.charAt(i);
       uint8_t idx = c - 'a';
       buffer[i] = chartable[idx];
@@ -220,7 +220,7 @@ private:
     return Wire.endTransmission();
   }
 
-  const uint8_t _i2c_addr;
   uint16_t _displaybuffer[8];
+  const uint8_t _i2c_addr;
 };
 

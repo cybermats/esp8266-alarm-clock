@@ -25,8 +25,8 @@
 
 #define I2C_PORT 0x70
 
-#define INITIAL_ALARM_TOPIC "home-assistant/alarm-clock/initial"
-#define ACTUAL_ALARM_TOPIC  "home-assistant/alarm-clock/actual"
+#define INITIAL_ALARM_TOPIC "cybermats/alarm-clock"
+#define ACTUAL_ALARM_TOPIC  "cybermats/alarm-clock"
 
 ClockDisplay display(I2C_PORT);
 WifiClock clock;
@@ -43,9 +43,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Clock starting up...");
   // put your setup code here, to run once:
-  if(display.begin(4, 5)) {
-    Serial.println("Error starting display.");
-  } 
+  display.begin(4, 5);
   display.setBlink(false);
   Serial.print("Wifi connecting... ");
   WiFi.begin(SSID_NAME, SSID_PASS);
@@ -60,15 +58,15 @@ void setup() {
   button.attach(PIN_ROTARY_BUTT);
   button.interval(5);
   Serial.println("done");
+  Serial.print("Getting time...");
+  clock.tick();
+  Serial.println("done");
   Serial.println("Initialize alarm...");
-  alarmSignal.begin(MQTT_SERVER);
+  alarmSignal.begin(clock.getEpochTime(), MQTT_SERVER);
   alarmState.setState(alarmSignal.getAlarmState());
   alarm.begin(alarmSignal.getHours(), alarmSignal.getMinutes());
   initialAlarm.begin(0, alarmSignal.getInitial());
   Serial.println("Alarm initialized.");
-  Serial.print("Getting time...");
-  clock.tick();
-  Serial.println("done");
   Serial.println("Clock started.");
   display.setDisplay(true);
 }
