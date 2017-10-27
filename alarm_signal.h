@@ -114,6 +114,22 @@ public:
   AlarmType getAlarmState() const {
     return _active;
   }
+
+  bool hasAlarmSoon(uint32_t now) const {
+    switch(_active) {
+      case OFF:
+        return false;
+      case ONCE:
+        return !_triggered;
+      case WEEKDAY:
+        if (_alarmTriggerTime == 0 || _initialTriggerTime == 0)
+          return false;
+        return _initialTriggerTime - now < (24*60*60);
+      case ON:
+        return true;
+    }
+    return false;
+  }
   
 private:
 

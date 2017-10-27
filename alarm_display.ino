@@ -97,7 +97,7 @@ void loop() {
   case CLOCK:
     if (clock.tick()) {
       display.printTime(clock.getHours(), clock.getMinutes(), clock.getColon());
-      display.addDot(alarmState.getState());
+      display.addDot(alarmSignal.hasAlarmSoon(clock.getEpochTime()) ? 4 : 0);
     }
     break;
   case ONOFF:
