@@ -4,24 +4,28 @@
 #include <PubSubClient.h>
 #include <EEPROM.h>
 #include "time_func.h"
+#include "alarm_state.h"
 
 class AlarmSignal
 {
 public:
-  AlarmSignal()
+  AlarmSignal(const char* initial_topic, const char* actual_topic)
   : _wifiClient()
   , _ps_client(_wifiClient)
+  , _initial_topic(initial_topic)
+  , _actual_topic(actual_topic)
   , _alarmTriggerTime(0)
   , _initialTriggerTime()
   {}
 
   void begin(const char* mqtt_server, uint16_t mqtt_port = 1883) 
   {
-    EEPROM.begin(4);
+    EEPROM.begin(5);
     _hours = EEPROM.read(0);
     _minutes = EEPROM.read(1);
     _initial = EEPROM.read(2);
-    _active = EEPROM.read(3);
+    _active = static_cast<AlarmType>(EEPROM.read(3));
+    _triggered = EEPROM.read(5);
     EEPROM.end();
     Serial.print("Connecting to MQTT server: ");
     Serial.print(mqtt_server);
@@ -31,18 +35,19 @@ public:
     connectMQTT();
   }
 
-  void setAlarm(uint8_t hours, uint8_t minutes, uint8_t initial, bool active, uint32_t now)
+  void setAlarm(uint8_t hours, uint8_t minutes, uint8_t initial, AlarmType active, uint32_t now)
   {
     _hours = hours;
     _minutes = minutes;
     _initial = initial;
     _active = active;
 
-    EEPROM.begin(4);
+    EEPROM.begin(5);
     EEPROM.write(0, _hours);
     EEPROM.write(1, _minutes);
     EEPROM.write(2, _initial);
     EEPROM.write(3, _active);
+    EEPROM.write(4, false);
     EEPROM.end();
     
     _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
@@ -64,25 +69,32 @@ public:
   }
 
   void process(uint32_t now) {
+    // Test if this is the first run, which means we haven't calculated
+    // the trigger times. Let's do that.
     if (_alarmTriggerTime == 0 || _initialTriggerTime == 0) {
+      
       _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
       _alarmTriggerTime = getNextAlarmTime(now, _hours, _minutes);
+      
       Serial.print("Initial initialized. Next alarm at: ");
       Serial.println(formatTime(_initialTriggerTime));
       Serial.print("Alarm initialized. Next alarm at: ");
       Serial.println(formatTime(_alarmTriggerTime));
     }
+
     
     if (_initialTriggerTime < now && _initialTriggerTime != _alarmTriggerTime) {
       _initialTriggerTime = getNextAlarmTime(now, _hours, _minutes - (int8_t)_initial);
       Serial.print("Initial triggered. Next alarm at: ");
       Serial.println(formatTime(_initialTriggerTime));
+      sendMQTTMessage(_initial_topic, String(_initial));
     }
     
     if (_alarmTriggerTime < now) {
       _alarmTriggerTime = getNextAlarmTime(now, _hours, _minutes);
       Serial.print("Alarm triggered. Next alarm at: ");
       Serial.println(formatTime(_alarmTriggerTime));
+      sendMQTTMessage(_actual_topic, "alarm");
     }
   }
   uint8_t getHours() const {
@@ -97,7 +109,7 @@ public:
     return _initial;
   }
 
-  bool getAlarmState() const {
+  AlarmType getAlarmState() const {
     return _active;
   }
   
@@ -117,9 +129,9 @@ private:
     }
   }
 
-  void sendMQTTMessage(String message) {
+  void sendMQTTMessage(const char* topic, String message) {
     connectMQTT();
-    _ps_client.publish("home-assistant/bedroom/wake_up_time", message.c_str());
+    _ps_client.publish(topic, message.c_str());
   }
 
 
@@ -127,11 +139,14 @@ private:
 
   WiFiClient _wifiClient;
   PubSubClient _ps_client;
+  const char* _initial_topic;
+  const char* _actual_topic;
   uint32_t _alarmTriggerTime;
   uint32_t _initialTriggerTime;
-  bool _active;
+  AlarmType _active;
   uint8_t _hours;
   uint8_t _minutes;
   uint8_t _initial;
+  bool _triggered;
 };
 

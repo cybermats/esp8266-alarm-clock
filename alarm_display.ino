@@ -8,7 +8,7 @@
 #include "alarm_clock.h"
 #include "time_func.h"
 #include "alarm_signal.h"
-
+#include "alarm_state.h"
 
 /* 
  *  secret.h contains defines for ssid and password
@@ -17,23 +17,25 @@
  */
 #include "secret.h"
 
+#define PIN_ROTARY_A 0
+#define PIN_ROTARY_B 2
+#define PIN_ROTARY_BUTT 14
 
-
-#define ROTARY_A 0
-#define ROTARY_B 2
-#define ROTARY_BUTT 14
-#define LED_PORT 13
 #define MQTT_SERVER "ubuntuserver"
+
 #define I2C_PORT 0x70
+
+#define INITIAL_ALARM_TOPIC "home-assistant/alarm-clock/initial"
+#define ACTUAL_ALARM_TOPIC  "home-assistant/alarm-clock/actual"
 
 ClockDisplay display(I2C_PORT);
 WifiClock clock;
 AlarmClock alarm(5);
 AlarmClock initialAlarm(1);
-AlarmSignal alarmSignal;
-bool alarmOn;
+AlarmSignal alarmSignal(INITIAL_ALARM_TOPIC, ACTUAL_ALARM_TOPIC);
+AlarmState alarmState;
 
-Encoder knob(ROTARY_A, ROTARY_B);
+Encoder knob(PIN_ROTARY_A, PIN_ROTARY_B);
 Bounce button;
 
 
@@ -54,14 +56,13 @@ void setup() {
   }
   Serial.println("done");
   Serial.print("Initializing LEDs and Buttons...");
-  pinMode(LED_PORT, OUTPUT);
-  pinMode(ROTARY_BUTT, INPUT_PULLUP);
-  button.attach(ROTARY_BUTT);
+  pinMode(PIN_ROTARY_BUTT, INPUT_PULLUP);
+  button.attach(PIN_ROTARY_BUTT);
   button.interval(5);
   Serial.println("done");
   Serial.println("Initialize alarm...");
   alarmSignal.begin(MQTT_SERVER);
-  alarmOn = alarmSignal.getAlarmState();
+  alarmState.setState(alarmSignal.getAlarmState());
   alarm.begin(alarmSignal.getHours(), alarmSignal.getMinutes());
   initialAlarm.begin(0, alarmSignal.getInitial());
   Serial.println("Alarm initialized.");
@@ -98,15 +99,15 @@ void loop() {
   case CLOCK:
     if (clock.tick()) {
       display.printTime(clock.getHours(), clock.getMinutes(), clock.getColon());
-      display.addDot(alarmOn ? 4 : 0);
+      display.addDot(alarmState.getState());
     }
     break;
   case ONOFF:
     if (knobDiff) {
       alarmUpdateTime = now_millis;
       if (knobDiff%2) {
-        alarmOn = !alarmOn;
-        display.printText(alarmOn ? "on" : "off");
+        alarmState.update(knobDiff);
+        display.printText(alarmState.toString());
       }
     }
     break;
@@ -134,7 +135,7 @@ void loop() {
     const auto sinceChange = now_millis - alarmUpdateTime;
     if (sinceChange > 5000) {
       Serial.println("Switching back.");
-      alarmSignal.setAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmOn, now_epoch);
+      alarmSignal.setAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmState.getState(), now_epoch);
       clockState = CLOCK;
       display.setBlink(false);
     }
@@ -152,7 +153,7 @@ void loop() {
       case CLOCK:
         Serial.println("ONOFF");
         clockState = ONOFF;
-        display.printText(alarmOn ? "on" : "off");
+        display.printText(alarmState.toString());
         break;
       case ONOFF:
         Serial.println("ALARM");
@@ -167,11 +168,13 @@ void loop() {
       case INITIAL:
         Serial.println("ONOFF");
         clockState = ONOFF;
-        display.printText(alarmOn ? "on" : "off");
+        display.printText(alarmState.toString());
         break;
     }
     display.setBlink(true);
     display.addDot(0);
   }
   display.writeDisplay();
+
+  delay(50);
 }
