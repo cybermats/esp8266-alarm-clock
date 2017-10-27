@@ -8,19 +8,16 @@ public:
   , _interval(interval)
   {}
 
-  void setHours(byte hours) {
+  void begin(uint8_t hours, uint8_t minutes) {
     _hours = hours;
-  }
-
-  void setMinutes(byte minutes) {
     _minutes = minutes;
   }
 
-  int getHours() const {
+  uint8_t getHours() const {
     return _hours;
   }
 
-  int getMinutes() const {
+  uint8_t getMinutes() const {
     return _minutes;
   }
 
@@ -34,9 +31,9 @@ public:
   }
 
   void update(int8_t delta) {
-    int timespan = delta * _interval;
-    int minutes = _minutes + timespan;
-    int hours = _hours;
+    const int8_t timespan = delta * _interval;
+    int8_t minutes = _minutes + timespan;
+    int8_t hours = _hours;
     while(minutes < 0) {
       --hours;
       minutes += 60;
@@ -57,8 +54,8 @@ public:
 
   
 private:
-  int _hours;
-  int _minutes;
-  int _interval;
+  uint8_t _hours;
+  uint8_t _minutes;
+  uint8_t _interval;
 };
 

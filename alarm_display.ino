@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <Encoder.h>
 #include <Bounce2.h>
-#include <PubSubClient.h>
 #include <EEPROM.h>
 
 #include "clock_display.h"
@@ -24,57 +23,25 @@
 #define ROTARY_B 2
 #define ROTARY_BUTT 14
 #define LED_PORT 13
+#define MQTT_SERVER "ubuntuserver"
+#define I2C_PORT 0x70
 
-ClockDisplay display;
+ClockDisplay display(I2C_PORT);
 WifiClock clock;
 AlarmClock alarm(5);
 AlarmClock initialAlarm(1);
 AlarmSignal alarmSignal;
 bool alarmOn;
+
 Encoder knob(ROTARY_A, ROTARY_B);
 Bounce button;
-WiFiClient wifiClient;
-PubSubClient ps_client(wifiClient);
 
-
-void reconnect() {
-  while (!ps_client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    if (ps_client.connect("ESP8266Client")) {
-      Serial.println("connected");
-    }
-    else {
-      Serial.print("failed, rc=");
-      Serial.print(ps_client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-}
-
-void writeAlarm(byte hour, byte minute, byte initMinutes, byte alarmOn) {
-  EEPROM.begin(4);
-  EEPROM.write(0, hour);
-  EEPROM.write(1, minute);
-  EEPROM.write(2, initMinutes);
-  EEPROM.write(3, alarmOn);
-  EEPROM.end();
-}
-
-void readAlarm(byte& hour, byte& minute, byte& initMinutes, byte& alarmOn) {
-  EEPROM.begin(4);
-  hour = EEPROM.read(0);
-  minute = EEPROM.read(1);
-  initMinutes = EEPROM.read(2);
-  alarmOn = EEPROM.read(3);
-  EEPROM.end();
-}
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Clock starting up...");
   // put your setup code here, to run once:
-  if(display.begin(4, 5, 0x70)) {
+  if(display.begin(4, 5)) {
     Serial.println("Error starting display.");
   } 
   display.setBlink(false);
@@ -92,29 +59,17 @@ void setup() {
   button.attach(ROTARY_BUTT);
   button.interval(5);
   Serial.println("done");
-  Serial.print("Initializing MQTT...");
-  ps_client.setServer("ubuntuserver", 1883);
-  Serial.println("done");
-  Serial.print("Initialize from EEPROM...");
-  byte hours, minutes;
-  byte initMinutes = 0;
-  byte alarmOnRead = true;
-  readAlarm(hours, minutes, initMinutes, alarmOnRead);
-  alarm.setHours(hours);
-  alarm.setMinutes(minutes);
-  initialAlarm.setMinutes(initMinutes);
-  alarmOn = alarmOnRead;
-  alarmSignal.setAlarm(hours, minutes, initMinutes, alarmOn);
-  
-  Serial.println("done");
+  Serial.println("Initialize alarm...");
+  alarmSignal.begin(MQTT_SERVER);
+  alarmOn = alarmSignal.getAlarmState();
+  alarm.begin(alarmSignal.getHours(), alarmSignal.getMinutes());
+  initialAlarm.begin(0, alarmSignal.getInitial());
+  Serial.println("Alarm initialized.");
   Serial.print("Getting time...");
   clock.tick();
   Serial.println("done");
   Serial.println("Clock started.");
   display.setDisplay(true);
-
-  
-
 }
 
 enum ClockState {
@@ -127,11 +82,6 @@ enum ClockState {
 ClockState clockState = CLOCK;
 uint32_t oldPosition;
 uint32_t alarmUpdateTime;
-
-void sendMQTTMessage(String message) {
-  reconnect();
-  ps_client.publish("home-assistant/bedroom/wake_up_time", message.c_str());
-}
 
 void loop() {
   const auto now_millis = millis();
@@ -181,10 +131,9 @@ void loop() {
   const auto now_epoch = clock.getEpochTime();
 
   if (clockState != CLOCK) {
-    auto sinceChange = now_millis - alarmUpdateTime;
+    const auto sinceChange = now_millis - alarmUpdateTime;
     if (sinceChange > 5000) {
       Serial.println("Switching back.");
-      writeAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmOn);
       alarmSignal.setAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmOn, now_epoch);
       clockState = CLOCK;
       display.setBlink(false);

@@ -101,12 +101,12 @@ constexpr uint8_t numbertable[] = {
 class ClockDisplay
 {
 public:
-  ClockDisplay()
+  ClockDisplay(uint8_t addr)
   : _displaybuffer({0, 0, 0, 0, 0, 0, 0, 0})
+  , _i2c_addr(addr)
   {}
-  byte begin(uint8_t sda, uint8_t scl, uint8_t addr)
+  byte begin(uint8_t sda, uint8_t scl)
   {
-    _i2c_addr = addr;
     Wire.begin(sda, scl);
 
     writeCommand(KT16K33_CMD_OSCILLATOR | KT16K33_CMD_ON); // Turn on oscillator
@@ -173,7 +173,7 @@ public:
     }
   }
 
-  void printText(String msg) {
+  void printText(const String& msg) {
     auto len = msg.length();
     if (len > 4) len = 4;
     uint8_t buffer[] = {0, 0, 0, 0};
@@ -220,7 +220,7 @@ private:
     return Wire.endTransmission();
   }
 
-  uint8_t _i2c_addr;
+  const uint8_t _i2c_addr;
   uint16_t _displaybuffer[8];
 };
 
