@@ -8,6 +8,7 @@
 #include "wifi_clock.h"
 #include "alarm_clock.h"
 #include "time_func.h"
+#include "alarm_signal.h"
 
 
 /* 
@@ -28,6 +29,7 @@ ClockDisplay display;
 WifiClock clock;
 AlarmClock alarm(5);
 AlarmClock initialAlarm(1);
+AlarmSignal alarmSignal;
 bool alarmOn;
 Encoder knob(ROTARY_A, ROTARY_B);
 Bounce button;
@@ -102,6 +104,7 @@ void setup() {
   alarm.setMinutes(minutes);
   initialAlarm.setMinutes(initMinutes);
   alarmOn = alarmOnRead;
+  alarmSignal.setAlarm(hours, minutes, initMinutes, alarmOn);
   
   Serial.println("done");
   Serial.print("Getting time...");
@@ -131,12 +134,12 @@ void sendMQTTMessage(String message) {
 }
 
 void loop() {
-  auto now = millis();
+  const auto now_millis = millis();
 
   // Handle rotary knob
-  auto newRawPosition = knob.read();
-  auto newPosition = newRawPosition >> 2;
-  int8_t knobDiff = newPosition - oldPosition;
+  const auto newRawPosition = knob.read();
+  const auto newPosition = newRawPosition >> 2;
+  const int8_t knobDiff = newPosition - oldPosition;
   if (knobDiff) {
     oldPosition = newPosition;
   }
@@ -150,7 +153,7 @@ void loop() {
     break;
   case ONOFF:
     if (knobDiff) {
-      alarmUpdateTime = now;
+      alarmUpdateTime = now_millis;
       if (knobDiff%2) {
         alarmOn = !alarmOn;
         display.printText(alarmOn ? "on" : "off");
@@ -159,14 +162,14 @@ void loop() {
     break;
   case ALARM:
     if (knobDiff) {
-      alarmUpdateTime = now;
+      alarmUpdateTime = now_millis;
       alarm.update(knobDiff);
       display.printTime(alarm.getHours(), alarm.getMinutes(), true);
     }
     break;
   case INITIAL:
     if (knobDiff) {
-      alarmUpdateTime = now;
+      alarmUpdateTime = now_millis;
       initialAlarm.update(knobDiff);
       display.printTime(-1, initialAlarm.getMinutes(), false);
     }
@@ -175,23 +178,27 @@ void loop() {
     break;
   }
 
+  const auto now_epoch = clock.getEpochTime();
+
   if (clockState != CLOCK) {
-    auto sinceChange = now - alarmUpdateTime;
+    auto sinceChange = now_millis - alarmUpdateTime;
     if (sinceChange > 5000) {
       Serial.println("Switching back.");
       writeAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmOn);
-      auto alarmTime = getNextAlarmTime(clock.getEpochTime(), alarm.getHours(), alarm.getMinutes());
-      Serial.print("New alarm at: ");
-      Serial.println(formatTime(alarmTime));
+      alarmSignal.setAlarm(alarm.getHours(), alarm.getMinutes(), initialAlarm.getMinutes(), alarmOn, now_epoch);
       clockState = CLOCK;
       display.setBlink(false);
     }
   }
 
+  if (alarmSignal.update(now_epoch)) {
+    alarmSignal.process(now_epoch);
+  }
+
   // Handle the button
   button.update();
   if (button.fell()) {
-    alarmUpdateTime = now;
+    alarmUpdateTime = now_millis;
     switch(clockState) {
       case CLOCK:
         Serial.println("ONOFF");
